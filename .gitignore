@@ -1,0 +1,21 @@
+# Ignore Python compiled files
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Ignore virtual environment
+venv/
+
+# Ignore JSON files (if you don't want to track JSON data)
+*.json
+
+# Ignore JavaScript compiled or node_modules (if using Node.js)
+node_modules/
+*.log
+
+# Ignore any temporary or backup files
+*.bak
+*.tmp
+
+# Ignore VSCode settings (optional)
+.vscode/
