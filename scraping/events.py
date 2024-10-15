@@ -5,7 +5,7 @@ import json
 
 # Set start and end years
 year = 2000
-lastYear = 2021
+lastYear = 2023
 eventData = {}
 
 def main():

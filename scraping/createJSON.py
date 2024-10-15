@@ -1,4 +1,5 @@
 import re 
+import dateRegexTester
 from datetime import datetime
 from fuzzywuzzy import process
 
@@ -29,13 +30,40 @@ def correct_month(month):
 
 def splitSentence(sentence):
     # Updated regex to match patterns like "1 January", "26–29 Nov", "early Feb", "late May", "mid-Dec", etc.
-    date_pattern = r"((\d{1,2})(–|-)?(\d{1,2})?\s(\w+)|(early|late|mid)(-)?\s\w+|\d{1,2}\s\w+)\s*–\s*(.*)"
+    # date_pattern = r"((\d{1,2})(–|-|:)?(\d{1,2})?\s(\w+)|(early|late|mid)(-)?\s\w+|\d{1,2}\s\w+)\s*–\s*(.*)"
     
-    match = re.match(date_pattern, sentence, re.IGNORECASE)
+    match = re.match(dateRegexTester.date_pattern, sentence, re.IGNORECASE)
+    # print(sentence)
     if match:
-        date_part = match.group(1)  # Extract the date part (e.g., "1 January", "early Feb", "mid-Dec", "26–29 Nov")
-        content_part = match.group(8)  # Extract the content part
-        return date_part, content_part
+        # Safely access the groups based on the existing structure of your pattern
+        # Extract the date part (the combined information from named groups)
+        relative_time = match.group('relative_time')  # 'early', 'mid', 'late'
+        day_start = match.group('day_start')  # Start day, if available
+        day_end = match.group('day_end')  # End day, if available
+        month = match.group('month')  # Month (e.g., January, Feb)
+        year = match.group('year')  # Year (if available)
+        
+        # Construct the date part based on what is available
+        date_part = ''
+        if relative_time:
+            date_part += relative_time.capitalize() + ' '
+        if day_start:
+            date_part += day_start
+            if day_end:
+                date_part += '–' + day_end  # Add day range if available
+        if month:
+            date_part += ' ' + month.capitalize()
+        if year:
+            date_part += ' ' + year
+        
+        # Extract the content part after the date
+        content_part = match.group('sentence') if match.group('sentence') else sentence  # Fallback to original sentence
+        if date_part and content_part:
+            return date_part.strip(), content_part.strip()
+        elif date_part and not content_part:
+            return date_part.strip(), sentence
+        elif not date_part and content_part:
+            return None, content_part.strip()
     else:
         return None, sentence
 
@@ -48,7 +76,7 @@ def extractDayMonth(date_part):
     if range_match:
         start_day = range_match.group(1)
         end_day = range_match.group(3)  # This is optional, could be None
-        month = range_match.group(4).capitalize()  # Extract the month
+        month = range_match.group(4)  # Extract the month
 
         # Correct any typos or abbreviations in the month
         corrected_month = correct_month(month)
@@ -74,7 +102,7 @@ def extractDayMonth(date_part):
     # Handle special cases for "early", "mid", "late" before months
     if 'early' in date_part or 'late' in date_part or 'mid' in date_part:
         # Extract the month name (allowing for optional hyphen)
-        month_name = re.search(r"(early|mid|late)(-)?\s(\w+)", date_part, re.IGNORECASE)
+        month_name = re.search(r"(early|mid|late)(-)?\s+(\w+)", date_part, re.IGNORECASE)
         if month_name:
             relative_time = month_name.group(1).capitalize()  # "Early", "Mid", "Late"
             month = month_name.group(3).capitalize()  # e.g., "December"
@@ -102,8 +130,30 @@ def extractDayMonth(date_part):
                 return day, month
             except ValueError:
                 return None, None
+    # single_match = re.search(r"(\d{1,2})?\s*(\w+)", date_part)
+    # print(single_match)
+    # if single_match:
+    #     day = single_match.group(1)  # This is the day (e.g., "1")
+    #     month = single_match.group(2)  # This could be None
 
+    #     if month:
+    #         corrected_month = correct_month(month)
+    #         if corrected_month:
+    #             # Validate the day
+    #             if corrected_month.lower() in month_days:
+    #                 max_day = month_days[corrected_month.lower()]
+    #                 if int(day) <= max_day:
+    #                     return day, corrected_month
+    #                 else:
+    #                     return None, corrected_month
+    #             else:
+    #                 return None, corrected_month
+    #     else:
+    #         # If no month, return day and None for the month
+    #         return day, "unknown"
 
+    # If no valid day or month is found
+    return None, None
 
 # Function to create the initial JSON structure for a given year and month
 def create_yearly_structure(year):
@@ -121,6 +171,7 @@ def create_yearly_structure(year):
             "october": [],
             "november": [],
             "december": [],
+            "unknown": [],
         }
     }
 
@@ -132,9 +183,12 @@ def addEvent(dataset, year, event):
     datePart, titlePart = splitSentence(event)
     if datePart:
         date, month = extractDayMonth(datePart)
-        # if month.lower() == "december":
-        #     print(event)
-        print(event, date, month)
+    
+        if not date:
+            date = None
+        if not month:
+            month = "unknown"
+
         dataset[year][month.lower()].append({
             "title": titlePart,
             "date": date,
